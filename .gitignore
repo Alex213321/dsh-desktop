@@ -1,0 +1,17 @@
+# 依赖（接收方通过 一键安装.bat / npm install 自行下载）
+node_modules/
+
+# 运行日志与缓存
+logs/
+*.log
+.npm-cache/
+.electron-cache/
+
+# 打包产物（避免把 zip 再传进仓库）
+*.zip
+release/
+
+# 系统/编辑器杂物
+Thumbs.db
+Desktop.ini
+.DS_Store

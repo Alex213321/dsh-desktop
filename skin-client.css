@@ -1,0 +1,273 @@
+/* DSH built-in skin switcher — injected styles. All namespaced. */
+
+body.dsh-skin {
+  background-color: #0d1017 !important;
+  background-image: none !important;
+}
+#dsh-skin-veil {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: rgba(8, 10, 20, 0.08);
+}
+.dsh-skin-video {
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  pointer-events: none;
+  transition: filter 0.3s ease;
+}
+.dsh-skin-image {
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  pointer-events: none;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  transition: filter 0.3s ease;
+}
+
+/* --- floating switcher button --- */
+#dsh-skin-fab {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 2147483000;
+  width: 168px;
+  height: 168px;
+  border: none;
+  background: transparent;
+  color: #fff;
+  cursor: pointer;
+  overflow: hidden;
+  padding: 0;
+  transition: transform 0.15s ease, right 0.15s ease;
+}
+#dsh-skin-fab video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+#dsh-skin-fab:hover {
+  transform: scale(1.05);
+}
+
+/* --- switcher panel --- */
+.dsh-skin-panel {
+  position: fixed;
+  right: 20px;
+  bottom: 198px;
+  z-index: 2147483001;
+  width: 300px;
+  max-height: min(600px, calc(100vh - 110px));
+  overflow-y: auto;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(24, 27, 38, 0.92);
+  color: #e8ecf4;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5);
+  font-family: "Segoe UI", "Microsoft YaHei", sans-serif;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 14px 16px;
+  box-sizing: border-box;
+  user-select: none;
+  backdrop-filter: blur(14px);
+}
+.dsh-skin-panel .dsh-skin-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  margin-bottom: 12px;
+}
+.dsh-skin-panel .dsh-skin-title {
+  font-size: 15px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.dsh-skin-panel .dsh-skin-close {
+  border: none;
+  background: transparent;
+  color: #b8c0d0;
+  font-size: 17px;
+  cursor: pointer;
+  padding: 2px 7px;
+  border-radius: 8px;
+  line-height: 1.4;
+}
+.dsh-skin-panel .dsh-skin-close:hover { background: rgba(255, 255, 255, 0.1); }
+
+.dsh-skin-panel .dsh-skin-covers {
+  max-height: 222px;
+  overflow-y: auto;
+  margin-bottom: 12px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.35) transparent;
+}
+.dsh-skin-panel .dsh-skin-covers::-webkit-scrollbar { width: 6px; }
+.dsh-skin-panel .dsh-skin-covers::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.35);
+  border-radius: 3px;
+}
+.dsh-skin-panel .dsh-skin-covers::-webkit-scrollbar-track { background: transparent; }
+.dsh-skin-panel .dsh-skin-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.dsh-skin-panel .dsh-skin-cover {
+  border-radius: 12px;
+  overflow: hidden;
+  border: 2px solid rgba(255, 255, 255, 0.12);
+  cursor: pointer;
+  background: rgba(0, 0, 0, 0.35);
+  transition: border-color 0.15s ease, transform 0.15s ease;
+  position: relative;
+}
+.dsh-skin-panel .dsh-skin-cover:hover { transform: translateY(-2px); }
+.dsh-skin-panel .dsh-skin-cover.dsh-skin-active {
+  border-color: #4d93f8;
+  box-shadow: 0 0 0 2px rgba(77, 147, 248, 0.35);
+}
+.dsh-skin-panel .dsh-skin-cover video,
+.dsh-skin-panel .dsh-skin-cover .dsh-skin-cover-img {
+  display: block;
+  width: 100%;
+  height: 76px;
+  object-fit: cover;
+}
+.dsh-skin-panel .dsh-skin-cover .dsh-skin-cover-img {
+  background-size: cover;
+  background-position: center;
+}
+.dsh-skin-panel .dsh-skin-cover .dsh-skin-cover-label {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 3px 6px;
+  font-size: 11px;
+  color: #fff;
+  background: linear-gradient(transparent, rgba(0, 0, 0, 0.72));
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dsh-skin-panel .dsh-skin-row { margin: 10px 0; }
+.dsh-skin-panel .dsh-skin-label {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+  color: #c3cad8;
+  font-size: 12px;
+}
+.dsh-skin-panel .dsh-skin-label b {
+  color: #fff;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+.dsh-skin-panel input[type="range"] {
+  width: 100%;
+  accent-color: #4d93f8;
+  cursor: pointer;
+  height: 18px;
+}
+
+/* --- frameless window: controls embedded in the session header row --- */
+.dsh-skin-win-btn {
+  -webkit-app-region: no-drag;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 32px;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  color: var(--dsw-alias-label-secondary, #b8c0d0);
+  cursor: pointer;
+  padding: 0;
+  margin-left: 2px;
+  flex: none;
+  transition: background-color 0.12s ease, color 0.12s ease;
+}
+.dsh-skin-win-btn.dsh-skin-win-first {
+  margin-left: 8px;
+}
+.dsh-skin-win-btn:hover {
+  background: var(--dsw-alias-interactive-bg-hover, rgba(127, 127, 127, 0.18));
+  color: var(--dsw-alias-label-primary, #ffffff);
+}
+.dsh-skin-win-close:hover {
+  background: #c42b1c;
+  color: #ffffff;
+}
+
+/* --- invisible drag zone: the session header row's blank areas only --- */
+.dsh-skin-dragrow {
+  -webkit-app-region: drag;
+}
+.dsh-skin-dragrow button,
+.dsh-skin-dragrow a,
+.dsh-skin-dragrow input,
+.dsh-skin-dragrow textarea,
+.dsh-skin-dragrow select,
+.dsh-skin-dragrow [role="button"],
+.dsh-skin-dragrow [contenteditable="true"] {
+  -webkit-app-region: no-drag;
+}
+
+/* --- info button (凭空生花) + 信息 panel --- */
+.dsh-skin-info-fab {
+  position: fixed;
+  bottom: 20px;
+  width: 168px;
+  height: 168px;
+  z-index: 2147483000;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  transition: transform 0.15s ease, left 0.15s ease;
+}
+.dsh-skin-info-fab:hover {
+  transform: scale(1.05);
+}
+.dsh-skin-info-fab video {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  pointer-events: none;
+}
+.dsh-skin-panel .dsh-skin-info-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--dsw-alias-border-l2, rgba(255, 255, 255, 0.1));
+  color: var(--dsw-alias-label-secondary, #c3cad8);
+  font-size: 13px;
+}
+.dsh-skin-panel .dsh-skin-info-row span {
+  flex: none;
+}
+.dsh-skin-panel .dsh-skin-info-val {
+  color: var(--dsw-alias-label-primary, #ffffff);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}

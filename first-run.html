@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<title>DSH 桌面版 · 首次设置</title>
+<style>
+  :root { color-scheme: dark; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    display: flex; align-items: center; justify-content: center;
+    background: radial-gradient(1200px 800px at 50% 18%, #1b3a5c 0%, #0e1a30 55%, #0a1224 100%);
+    background-image: linear-gradient(rgba(5,10,22,.55), rgba(5,10,22,.55)), url('assets/background.png');
+    background-size: cover, cover;
+    background-position: center, center;
+    background-repeat: no-repeat, no-repeat;
+    font-family: "Segoe UI", "Microsoft YaHei", sans-serif;
+    overflow: hidden;
+    user-select: none;
+  }
+  .card {
+    width: 420px; max-width: calc(100vw - 48px);
+    border-radius: 18px;
+    background: rgba(18, 22, 34, 0.92);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+    padding: 28px;
+    color: #eaf3ff;
+    backdrop-filter: blur(10px);
+  }
+  h1 { font-size: 20px; font-weight: 700; margin-bottom: 8px; }
+  .sub { font-size: 13px; color: #9db8dc; line-height: 1.7; margin-bottom: 18px; }
+  label { display: block; font-size: 13px; color: #c6d6ee; margin-bottom: 6px; }
+  input {
+    width: 100%; height: 40px;
+    border-radius: 10px;
+    border: 1px solid rgba(255,255,255,.18);
+    background: rgba(255,255,255,.06);
+    color: #fff;
+    font-size: 13px;
+    padding: 0 12px;
+    outline: none;
+    font-family: Consolas, "Courier New", monospace;
+  }
+  input:focus { border-color: #4d93f8; }
+  .error { min-height: 18px; font-size: 12px; color: #ff8080; margin-top: 6px; }
+  .actions { display: flex; justify-content: flex-end; margin-top: 14px; }
+  button {
+    border: none; border-radius: 10px;
+    background: #4d93f8; color: #fff;
+    font-size: 14px; font-weight: 600;
+    padding: 10px 22px; cursor: pointer;
+  }
+  button:hover { background: #5da2ff; }
+  button:disabled { opacity: .6; cursor: default; }
+  .note { margin-top: 16px; font-size: 12px; color: #7d92b8; line-height: 1.7; }
+</style>
+</head>
+<body>
+  <div class="card">
+    <h1>欢迎使用 DSH 桌面版</h1>
+    <div class="sub">首次使用需要配置 DeepSeek API Key，与官方 DSH 共用同一份配置（保存在本机 <b>~/.dsh</b>），仅用于调用 DeepSeek 官方接口。</div>
+    <label for="key">DeepSeek API Key</label>
+    <input id="key" type="text" placeholder="sk-..." spellcheck="false" autocomplete="off" />
+    <div class="error" id="error"></div>
+    <div class="actions"><button id="go">进入 DSH</button></div>
+    <div class="note">密钥可在 DeepSeek 开放平台（platform.deepseek.com）获取。之后如需更换，可直接编辑本机 <b>~/.dsh/.credentials.yaml</b> 文件。</div>
+  </div>
+
+  <script>
+    (function () {
+      var input = document.getElementById('key');
+      var btn = document.getElementById('go');
+      var err = document.getElementById('error');
+      var bridge = window.dshSetup;
+
+      function submit() {
+        var key = (input.value || '').trim();
+        if (!/^sk-[A-Za-z0-9]{16,}$/.test(key)) {
+          err.textContent = '密钥格式不正确（应以 sk- 开头，且长度足够）';
+          return;
+        }
+        btn.disabled = true;
+        btn.textContent = '保存中…';
+        if (!bridge) {
+          err.textContent = '桥接不可用，请重启应用';
+          btn.disabled = false;
+          btn.textContent = '进入 DSH';
+          return;
+        }
+        bridge.saveKey(key).then(function (res) {
+          if (res && res.ok) {
+            err.textContent = '';
+            btn.textContent = '已保存，正在启动…';
+          } else {
+            btn.disabled = false;
+            btn.textContent = '进入 DSH';
+            err.textContent = '保存失败：' + ((res && res.reason) || '未知错误');
+          }
+        }).catch(function () {
+          btn.disabled = false;
+          btn.textContent = '进入 DSH';
+          err.textContent = '保存失败：服务未响应';
+        });
+      }
+
+      btn.addEventListener('click', submit);
+      input.addEventListener('keydown', function (e) { if (e.key === 'Enter') submit(); });
+      input.focus();
+    })();
+  </script>
+</body>
+</html>

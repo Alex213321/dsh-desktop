@@ -1,0 +1,14 @@
+{
+  "name": "dsh-desktop",
+  "productName": "DSH",
+  "version": "1.0.0",
+  "description": "DSH 桌面端：Electron 外壳 + 官方 dsh web 服务，托盘常驻，界面与 Web 版完全一致",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^43.4.1"
+  }
+}

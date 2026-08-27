@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<title>DSH</title>
+<style>
+  :root { color-scheme: dark; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    display: flex; align-items: center; justify-content: center;
+    background: radial-gradient(1200px 800px at 50% 18%, #1b3a5c 0%, #0e1a30 55%, #0a1224 100%);
+    background-image: linear-gradient(rgba(5,10,22,.28), rgba(5,10,22,.28)), url('assets/background.png');
+    background-size: cover, cover;
+    background-position: center, center;
+    background-repeat: no-repeat, no-repeat;
+    font-family: "Segoe UI", "Microsoft YaHei", sans-serif;
+    overflow: hidden;
+    user-select: none;
+  }
+  .stage { position: relative; display: flex; flex-direction: column; align-items: center; }
+
+  /* floating ambient dots */
+  .bg-dot {
+    position: absolute; border-radius: 50%;
+    background: rgba(255,255,255,.07);
+    animation: float 6s ease-in-out infinite;
+  }
+  @keyframes float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-14px); }
+  }
+
+  .bubbles { position: relative; }
+  .mascot {
+    width: 128px; height: 128px; border-radius: 50%;
+    object-fit: cover;
+    box-shadow: 0 10px 40px rgba(56,148,255,.35);
+    animation: bounce 1.4s ease-in-out infinite;
+  }
+  @keyframes bounce {
+    0%, 100% { transform: translateY(0) rotate(-2deg); }
+    50% { transform: translateY(-16px) rotate(2deg); }
+  }
+  .bubble {
+    position: absolute; bottom: 4px; width: 14px; height: 14px; border-radius: 50%;
+    background: radial-gradient(circle at 30% 30%, rgba(255,255,255,.55), rgba(120,180,255,.12) 60%, transparent);
+    border: 1px solid rgba(255,255,255,.25);
+    animation: rise 3s linear infinite;
+  }
+  @keyframes rise {
+    0% { transform: translateY(0) scale(.5); opacity: 0; }
+    15% { opacity: .9; }
+    100% { transform: translateY(-160px) scale(1.2); opacity: 0; }
+  }
+
+  .title {
+    margin-top: 28px; font-size: 26px; font-weight: 700; letter-spacing: 3px;
+    color: #eaf3ff; text-shadow: 0 2px 12px rgba(80,150,255,.45);
+  }
+  .status { margin-top: 16px; font-size: 14px; color: #9db8dc; min-height: 20px; }
+  .loading { margin-top: 4px; font-size: 15px; color: #6f8cb5; letter-spacing: 2px; }
+  .loading .dot { display: inline-block; animation: blink 1.2s infinite; }
+  .loading .dot:nth-child(2) { animation-delay: .2s; }
+  .loading .dot:nth-child(3) { animation-delay: .4s; }
+  @keyframes blink { 0%, 80%, 100% { opacity: .2; } 40% { opacity: 1; } }
+
+  /* frameless window: drag strip + window controls */
+  .win-dragbar {
+    position: fixed; top: 0; left: 0; right: 0; height: 40px;
+    z-index: 10; -webkit-app-region: drag;
+  }
+  .win-btn {
+    position: fixed; top: 0; width: 36px; height: 32px; z-index: 11;
+    -webkit-app-region: no-drag;
+    display: flex; align-items: center; justify-content: center;
+    border: none; background: transparent; color: #b8c0d0;
+    cursor: pointer; padding: 0;
+    border-radius: 8px;
+    transition: background-color .12s ease, color .12s ease;
+  }
+  .win-btn:hover { background: rgba(255,255,255,.14); color: #fff; }
+  .win-close:hover { background: #c42b1c; color: #fff; }
+  .win-min { right: 76px; }
+  .win-max { right: 38px; }
+  .win-close { right: 0; }
+</style>
+</head>
+<body>
+  <div class="win-dragbar"></div>
+  <button class="win-btn win-min" title="最小化"><svg width="15" height="15" viewBox="0 0 12 12" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"><path d="M2.5 6h7"/></svg></button>
+  <button class="win-btn win-max" title="最大化/还原"><svg width="15" height="15" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.1"><rect x="2.5" y="2.5" width="7" height="7" rx="1"/></svg></button>
+  <button class="win-btn win-close" title="关闭"><svg width="15" height="15" viewBox="0 0 12 12" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"><path d="M3.2 3.2l5.6 5.6M8.8 3.2l-5.6 5.6"/></svg></button>
+
+  <div class="stage">
+    <div class="bg-dot" style="width:6px;height:6px;left:-190px;top:-80px;"></div>
+    <div class="bg-dot" style="width:4px;height:4px;left:-140px;top:20px;animation-delay:1.2s;"></div>
+    <div class="bg-dot" style="width:5px;height:5px;left:150px;top:-50px;animation-delay:2s;"></div>
+    <div class="bg-dot" style="width:4px;height:4px;left:190px;top:40px;animation-delay:.8s;"></div>
+    <div class="bg-dot" style="width:5px;height:5px;left:60px;top:-120px;animation-delay:3s;"></div>
+    <div class="bg-dot" style="width:3px;height:3px;left:-60px;top:-130px;animation-delay:2.6s;"></div>
+
+    <div class="bubbles">
+      <img class="mascot" id="mascot" src="assets/avatar.png" alt="DSH" />
+      <span class="bubble" style="left:-38px;"></span>
+      <span class="bubble" style="left:-16px; animation-delay:1s; width:10px; height:10px;"></span>
+      <span class="bubble" style="right:-32px; animation-delay:.5s;"></span>
+      <span class="bubble" style="right:-14px; animation-delay:1.6s; width:8px; height:8px;"></span>
+      <span class="bubble" style="left:8px; animation-delay:2.2s; width:9px; height:9px;"></span>
+    </div>
+
+    <div class="title">我太想进步了！</div>
+    <div class="status" id="status">正在启动…</div>
+    <div class="loading">loading<span class="dot">.</span><span class="dot">.</span><span class="dot">.</span></div>
+  </div>
+
+  <script>
+    // Called from the Electron main process via executeJavaScript.
+    window.__setLoading = function (text) {
+      var el = document.getElementById('status');
+      if (el && text) el.textContent = text;
+    };
+    // Fallback: if the mascot image is missing, show a bouncing whale emoji.
+    document.getElementById('mascot').onerror = function () {
+      var s = document.createElement('span');
+      s.textContent = '\u{1F433}';
+      s.style.cssText = 'font-size:96px;line-height:128px;display:inline-block;animation:bounce 1.4s ease-in-out infinite;';
+      this.replaceWith(s);
+    };
+
+    // Window controls (frameless window).
+    var dshWindow = window.dshWindow;
+    if (dshWindow) {
+      document.querySelector('.win-min').addEventListener('click', function () { dshWindow.minimize(); });
+      document.querySelector('.win-max').addEventListener('click', function () { dshWindow.maximize(); });
+      document.querySelector('.win-close').addEventListener('click', function () { dshWindow.close(); });
+    }
+  </script>
+</body>
+</html>
