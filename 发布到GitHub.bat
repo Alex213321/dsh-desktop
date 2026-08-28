@@ -67,9 +67,10 @@ if errorlevel 1 (
   echo [Creating repository] %REPO_NAME%
   gh repo create %REPO_NAME% --public --description "%REPO_DESC%" --source . --push
 ) else (
-  echo [Repository exists] Pushing updates...
+  echo [Repository exists] Syncing remote changes, then pushing...
   git remote remove origin >nul 2>nul
   git remote add origin https://github.com/%GH_USER%/%REPO_NAME%.git
+  git pull --rebase origin main
   git push -u origin main
 )
 

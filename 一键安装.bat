@@ -32,7 +32,7 @@ if errorlevel 1 (
 
 :shortcut
 echo [2/2] Creating desktop shortcut "DSH Desktop"...
-powershell -NoProfile -ExecutionPolicy Bypass -Command "$ws = New-Object -ComObject WScript.Shell; $lnk = $ws.CreateShortcut([Environment]::GetFolderPath('Desktop') + '\DSH Desktop.lnk'); $lnk.TargetPath = '%CD%\node_modules\electron\dist\electron.exe'; $lnk.Arguments = '\"%CD%\"'; $lnk.WorkingDirectory = '%CD%'; $lnk.IconLocation = '%CD%\assets\app.ico,0'; $lnk.Description = 'DSH Desktop'; $lnk.Save()"
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0create-shortcut.ps1"
 if errorlevel 1 (
   echo [WARN] Shortcut creation failed. You can start manually with: npm start
   pause
