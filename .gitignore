@@ -15,3 +15,6 @@ release/
 Thumbs.db
 Desktop.ini
 .DS_Store
+
+# 维护者本机的发布工具（仅项目维护者需要，不随仓库/安装包分发）
+发布到GitHub.bat
