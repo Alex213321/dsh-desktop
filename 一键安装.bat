@@ -30,6 +30,20 @@ if errorlevel 1 (
   exit /b 1
 )
 
+rem Some machines skip the postinstall binary download silently:
+rem if electron.exe is still missing, download it explicitly.
+if not exist "node_modules\electron\dist\electron.exe" (
+  echo [1/2b] Electron binary missing, downloading it now...
+  node "node_modules\electron\install.js"
+)
+if not exist "node_modules\electron\dist\electron.exe" (
+  echo.
+  echo [ERROR] Electron binary still missing after download attempt.
+  echo Please check your network and run this script again.
+  pause
+  exit /b 1
+)
+
 :shortcut
 echo [2/2] Creating desktop shortcut "DSH Desktop"...
 powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0create-shortcut.ps1"
