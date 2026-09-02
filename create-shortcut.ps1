@@ -1,6 +1,9 @@
-# DSH Desktop - create the desktop shortcut + a fallback VBS launcher.
-# The path is derived from this script's own location (no interpolation),
-# and the shortcut result is verified by reading it back.
+# DSH Desktop - create a bulletproof desktop launcher set:
+#   1) a VBS launcher that runs Electron silently (no shell-link resolution);
+#   2) a .lnk whose target is the system script host wscript.exe (a file that
+#      ALWAYS exists), which simply executes that VBS. The classic
+#      "target changed or moved" repair wizard can therefore never appear.
+# The paths are derived from this script's own location (no interpolation).
 
 $dir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $exe = Join-Path $dir 'node_modules\electron\dist\electron.exe'
@@ -21,28 +24,31 @@ if (-not (Test-Path $exe)) {
 }
 
 $desktop = [Environment]::GetFolderPath('Desktop')
-
-# 1) Regular shortcut (nice icon, standard double-click)
 $ws = New-Object -ComObject WScript.Shell
+
+# 1) VBS launcher (the real engine; runs hidden, no console window).
+$vbs = 'Set sh = CreateObject("WScript.Shell")' + "`r`n" +
+       'sh.Run """' + $exe + '"" """' + $dir + '""", 0, False'
+$vbsPath = $desktop + '\DSH Desktop Launcher.vbs'
+[System.IO.File]::WriteAllText($vbsPath, $vbs, [System.Text.Encoding]::Unicode)
+Write-Output ('[OK] VBS launcher created: ' + $vbsPath)
+
+# 2) Desktop shortcut whose target is the always-present script host.
+$wsHost = Join-Path $env:SystemRoot 'System32\wscript.exe'
+if (-not (Test-Path $wsHost)) {
+  $wsHost = Join-Path $env:SystemRoot 'SysWOW64\wscript.exe'
+}
 $lnkPath = $desktop + '\DSH Desktop.lnk'
 $lnk = $ws.CreateShortcut($lnkPath)
-$lnk.TargetPath = $exe
-$lnk.Arguments = '"' + $dir + '"'
+$lnk.TargetPath = $wsHost
+$lnk.Arguments = '"' + $vbsPath + '"'
 $lnk.WorkingDirectory = $dir
 $lnk.IconLocation = (Join-Path $dir 'assets\app.ico') + ',0'
 $lnk.Description = 'DSH Desktop'
 $lnk.Save()
 $check = $ws.CreateShortcut($lnkPath)
-if ($check.TargetPath -ne $exe) {
+if ($check.TargetPath -ne $wsHost) {
   Write-Output ('[ERROR] Shortcut verification failed, target saved as: ' + $check.TargetPath)
   exit 1
 }
 Write-Output ('[OK] Desktop shortcut created: ' + $lnkPath)
-
-# 2) Fallback VBS launcher: launches Electron silently with no shortcut
-#    resolution involved. Works even where .lnk resolution misbehaves.
-$vbs = 'Set sh = CreateObject("WScript.Shell")' + "`r`n" +
-       'sh.Run """' + $exe + '"" """' + $dir + '""", 0, False'
-$vbsPath = $desktop + '\DSH Desktop Launcher.vbs'
-[System.IO.File]::WriteAllText($vbsPath, $vbs, [System.Text.Encoding]::Unicode)
-Write-Output ('[OK] Fallback launcher created: ' + $vbsPath)
