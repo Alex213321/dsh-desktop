@@ -27,8 +27,15 @@ $desktop = [Environment]::GetFolderPath('Desktop')
 $ws = New-Object -ComObject WScript.Shell
 
 # 1) VBS launcher (the real engine; runs hidden, no console window).
-$vbs = 'Set sh = CreateObject("WScript.Shell")' + "`r`n" +
-       'sh.Run """' + $exe + '"" """' + $dir + '""", 0, False'
+#    If electron.exe ever goes missing, show a clear message instead of
+#    failing silently.
+$vbs = 'Set fso = CreateObject("Scripting.FileSystemObject")' + "`r`n" +
+       'If Not fso.FileExists("' + ($exe -replace '"', '""') + '") Then' + "`r`n" +
+       '  MsgBox "DSH: electron.exe not found. Please run the installer again (双击一键安装.bat).", 48, "DSH Desktop"' + "`r`n" +
+       'Else' + "`r`n" +
+       '  Set sh = CreateObject("WScript.Shell")' + "`r`n" +
+       '  sh.Run """' + $exe + '"" """' + $dir + '""", 0, False' + "`r`n" +
+       'End If'
 $vbsPath = $desktop + '\DSH Desktop Launcher.vbs'
 [System.IO.File]::WriteAllText($vbsPath, $vbs, [System.Text.Encoding]::Unicode)
 Write-Output ('[OK] VBS launcher created: ' + $vbsPath)
