@@ -34,10 +34,24 @@ $vbs = 'Set fso = CreateObject("Scripting.FileSystemObject")' + "`r`n" +
        '  MsgBox "DSH: electron.exe not found. Please run the installer again (双击一键安装.bat).", 48, "DSH Desktop"' + "`r`n" +
        'Else' + "`r`n" +
        '  Set sh = CreateObject("WScript.Shell")' + "`r`n" +
-       '  sh.Run """' + $exe + '"" """' + $dir + '""", 0, False' + "`r`n" +
+       '  sh.Run """' + $exe + '"" ""' + $dir + '""", 0, False' + "`r`n" +
        'End If'
 $vbsPath = $desktop + '\DSH Desktop Launcher.vbs'
 [System.IO.File]::WriteAllText($vbsPath, $vbs, [System.Text.Encoding]::Unicode)
+
+# Compile-check the generated VBS before leaving it on the user's desktop.
+# VBScript compiles the whole file before any statement runs, so prepending
+# 'WScript.Quit' makes cscript a pure syntax checker (zero side effects).
+$checkPath = Join-Path $env:TEMP ('DSH-vbs-check-' + [guid]::NewGuid().ToString('N') + '.vbs')
+[System.IO.File]::WriteAllText($checkPath, 'WScript.Quit' + "`r`n" + $vbs, [System.Text.Encoding]::Unicode)
+& "$env:SystemRoot\System32\cscript.exe" //nologo $checkPath *> $null
+$vbsOk = ($LASTEXITCODE -eq 0)
+Remove-Item $checkPath -ErrorAction SilentlyContinue
+if (-not $vbsOk) {
+  Write-Output '[ERROR] Generated VBS launcher failed VBScript syntax check.'
+  Write-Output '        Please check the install path for unusual characters.'
+  exit 1
+}
 Write-Output ('[OK] VBS launcher created: ' + $vbsPath)
 
 # 2) Desktop shortcut whose target is the always-present script host.
