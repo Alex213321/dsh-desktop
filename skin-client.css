@@ -231,6 +231,19 @@ body.dsh-skin {
   background: transparent;
 }
 
+/* Invisible drag bar along the top edge, behind the page content: only
+   empty top pixels (hero view, margins) hit it, so the window can always be
+   dragged without blocking any UI element above it. */
+.dsh-skin-topdrag {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 34px;
+  z-index: -1;
+  -webkit-app-region: drag;
+}
+
 /* --- invisible drag zone: the session header row's blank areas only --- */
 .dsh-skin-dragrow {
   -webkit-app-region: drag;

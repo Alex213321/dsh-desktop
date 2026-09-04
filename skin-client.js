@@ -500,7 +500,9 @@
     // underneath; the strip itself carries the drag region (buttons no-drag).
     const TITLEBAR_W = 132;
     let titlebarEl = null;
+    let topDragEl = null;
     let paddingRow = null;
+    let dragRow = null;
 
     function buildTitlebar() {
       const bar = document.createElement('div');
@@ -509,6 +511,13 @@
       bar.appendChild(btnMax);
       bar.appendChild(btnClose);
       document.body.appendChild(bar);
+      // Invisible top-edge drag bar (behind the UI): drags the window over
+      // empty top pixels, e.g. the hero view where no header is mounted.
+      if (!topDragEl) {
+        topDragEl = document.createElement('div');
+        topDragEl.className = 'dsh-skin-topdrag';
+        document.body.appendChild(topDragEl);
+      }
       return bar;
     }
 
@@ -538,10 +547,27 @@
       titlebarEl.style.height = height + 'px';
     }
 
+    // The whole header row is a drag zone (its blank areas and title text
+    // drag the window; interactive children are no-drag via CSS), so the
+    // window can be moved by grabbing the top of the interface again.
+    function updateDragRow(row) {
+      if (dragRow && dragRow !== row) {
+        dragRow.classList.remove('dsh-skin-dragrow');
+        dragRow.style.paddingRight = '';
+        dragRow = null;
+      }
+      if (!row) return;
+      dragRow = row;
+      if (!dragRow.classList.contains('dsh-skin-dragrow')) {
+        dragRow.classList.add('dsh-skin-dragrow');
+      }
+    }
+
     function shiftHeaderForControls() {
       const log = findSessionLogButton();
       if (!log) {
         positionTitlebar(null);
+        updateDragRow(null);
         return;
       }
       let row = null;
@@ -561,6 +587,7 @@
           paddingRow.style.paddingRight = TITLEBAR_W + 'px';
         }
       }
+      updateDragRow(row);
       positionTitlebar(log);
     }
 
