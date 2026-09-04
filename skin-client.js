@@ -521,9 +521,29 @@
       return null;
     }
 
+    // Vertically line the strip up with the "Session 日志" button row (with a
+    // small inset); defaults apply while no header is mounted (hero view).
+    function positionTitlebar(logBtn) {
+      if (!titlebarEl) return;
+      let top = 6;
+      let height = 34;
+      if (logBtn) {
+        const r = logBtn.getBoundingClientRect();
+        if (r.height > 0) {
+          top = Math.max(2, Math.round(r.top - 2));
+          height = Math.max(32, Math.round(r.height + 4));
+        }
+      }
+      titlebarEl.style.top = top + 'px';
+      titlebarEl.style.height = height + 'px';
+    }
+
     function shiftHeaderForControls() {
       const log = findSessionLogButton();
-      if (!log) return;
+      if (!log) {
+        positionTitlebar(null);
+        return;
+      }
       let row = null;
       let node = log;
       for (let i = 0; i < 5 && node; i++) {
@@ -534,12 +554,14 @@
         }
         node = node.parentElement;
       }
-      if (!row) return;
-      if (paddingRow && paddingRow !== row) paddingRow.style.paddingRight = '';
-      paddingRow = row;
-      if (parseInt(paddingRow.style.paddingRight, 10) !== TITLEBAR_W) {
-        paddingRow.style.paddingRight = TITLEBAR_W + 'px';
+      if (row) {
+        if (paddingRow && paddingRow !== row) paddingRow.style.paddingRight = '';
+        paddingRow = row;
+        if (parseInt(paddingRow.style.paddingRight, 10) !== TITLEBAR_W) {
+          paddingRow.style.paddingRight = TITLEBAR_W + 'px';
+        }
       }
+      positionTitlebar(log);
     }
 
     function syncWindowUI() {
@@ -549,14 +571,15 @@
 
     syncWindowUI();
     // The header mounts asynchronously with the session; re-apply the
-    // left-shift whenever it (or its content) changes. The interval is only
-    // a safety net for odd re-renders.
+    // left-shift and alignment whenever it (or its content) changes. The
+    // interval is only a safety net for odd re-renders.
     const shiftThrottled = throttle(shiftHeaderForControls, 400);
     const winObserver = new MutationObserver(() => {
       if (!titlebarEl || !titlebarEl.isConnected) titlebarEl = buildTitlebar();
       shiftThrottled();
     });
     winObserver.observe(document.body, { childList: true, subtree: true });
+    window.addEventListener('resize', () => positionTitlebar(findSessionLogButton()));
     setInterval(syncWindowUI, 5000);
   }
 

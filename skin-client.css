@@ -186,7 +186,7 @@ body.dsh-skin {
   height: 18px;
 }
 
-/* --- frameless window: controls embedded in the session header row --- */
+/* --- frameless window: controls in a translucent corner strip --- */
 .dsh-skin-win-btn {
   -webkit-app-region: no-drag;
   display: inline-flex;
@@ -196,8 +196,8 @@ body.dsh-skin {
   height: 32px;
   border-radius: 8px;
   border: none;
-  background: transparent;
-  color: var(--dsw-alias-label-secondary, #b8c0d0);
+  background: rgba(5, 10, 22, 0.28); /* translucent chip, like the loading screen */
+  color: #b8c0d0;
   cursor: pointer;
   padding: 0;
   margin-left: 2px;
@@ -208,32 +208,27 @@ body.dsh-skin {
   margin-left: 8px;
 }
 .dsh-skin-win-btn:hover {
-  background: var(--dsw-alias-interactive-bg-hover, rgba(127, 127, 127, 0.18));
-  color: var(--dsw-alias-label-primary, #ffffff);
+  background: rgba(255, 255, 255, 0.14);
+  color: #ffffff;
 }
 .dsh-skin-win-close:hover {
   background: #c42b1c;
   color: #ffffff;
 }
 
-/* Fallback titlebar strip: used only while no recognizable header is mounted
-   (view switches, third-party UIs). Floating at the top-right corner. */
+/* Persistent corner strip: transparent shell — only the translucent buttons
+   are visible (matching the loading screen). top/height are set from the
+   measured header row so the controls line up with "Session 日志"; right
+   stays a few px away from the window edge. */
 .dsh-skin-titlebar {
   position: fixed;
-  top: 0;
-  right: 0;
+  right: 12px;
   z-index: 2147483002;
   display: flex;
   align-items: center;
-  height: 34px;
-  padding: 0 6px 0 2px;
+  padding: 0 2px;
   -webkit-app-region: drag;
-  border-radius: 0 0 0 12px;
-  background: linear-gradient(180deg, rgba(0, 0, 0, 0.3), transparent);
-  opacity: 0.85;
-}
-.dsh-skin-titlebar:hover {
-  opacity: 1;
+  background: transparent;
 }
 
 /* --- invisible drag zone: the session header row's blank areas only --- */
