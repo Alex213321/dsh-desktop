@@ -599,14 +599,17 @@ async function ensureServer() {
     // Something already serves 3080. If a previous instance of this app
     // started it, its launch token is the last one in the log — verify it
     // first, because a foreign `dsh web` (e.g. the dev server) has its own
-    // token. With no verified token, try a plain load first: an existing
-    // session cookie may already authenticate it, and checkAuthFallback()
-    // starts a spare service if the page is denied.
+    // token.
     const logToken = readLastLaunchToken();
     if (logToken && (await tokenProbe(DSH_URL, logToken))) {
       launchToken = logToken;
+      serverReady = true;
+      return;
     }
-    serverReady = true;
+    // No verified token: start our own service on an OS-assigned port right
+    // away, while the loading screen is still up, so the window opens the
+    // real UI directly instead of flashing through an empty 401 page.
+    await spawnService(['--port', '0']);
     return;
   }
   await spawnService([]);

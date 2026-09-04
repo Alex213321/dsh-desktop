@@ -220,6 +220,16 @@
   }
 
   // --- switcher UI ------------------------------------------------------------
+  // The 0.1.2-rc.1 chat composer is a Lexical editor, not a textarea; the UI
+  // exposes stable data-* contracts for it, so prefer them with fallbacks.
+  function findComposerInput() {
+    return (
+      document.querySelector('[data-composer-input]') ||
+      document.querySelector('textarea') ||
+      document.querySelector('[contenteditable="true"]')
+    );
+  }
+
   // Position the maid button at the horizontal midpoint between the message
   // input box's right edge and the window's right edge. The layout is fluid,
   // so re-measure on resize and periodically.
@@ -228,7 +238,7 @@
     const BUTTON_WIDTH = 168;
     let right = 20;
     try {
-      const ta = document.querySelector('textarea');
+      const ta = findComposerInput();
       if (ta) {
         const rect = ta.getBoundingClientRect();
         const gap = window.innerWidth - rect.right;
@@ -476,39 +486,56 @@
       '<svg width="15" height="15" viewBox="0 0 12 12" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"><path d="M3.2 3.2l5.6 5.6M8.8 3.2l-5.6 5.6"/></svg>'
     );
 
-    function anchorWindowButtons() {
+    // Anchors, new harness UI first (0.1.2-rc.1+ exposes stable data-*
+    // contracts and data-slot names), then the legacy Session log header,
+    // then a fixed overlay strip so the window always has working controls.
+    let titlebarEl = null;
+
+    function findLegacyAnchor() {
       const log = findSessionLogButton();
-      if (!log || !log.parentElement) return;
-      if (btnMin.parentElement === log.parentElement && btnMin.previousElementSibling === log) return;
-      log.parentElement.insertBefore(btnClose, log.nextSibling);
-      log.parentElement.insertBefore(btnMax, btnClose);
-      log.parentElement.insertBefore(btnMin, btnMax);
+      return log && log.parentElement ? log.parentElement : null;
     }
 
-    // Invisible drag zone: only the session header row's blank areas drag;
-    // every interactive element inside keeps working (no-drag).
+    function findHeaderAnchor() {
+      const slots = document.querySelectorAll('[data-slot]');
+      for (const slot of slots) {
+        const name = slot.getAttribute('data-slot') || '';
+        if (name === 'conversation.session.header.utilities') return slot.parentElement || slot;
+        if (name === 'conversation.session.header.actions') return slot.parentElement || slot;
+      }
+      const head = document.querySelector('[data-slot="conversation.session.header"]');
+      if (head) return head;
+      // Legacy layout: the header contains the Session log button.
+      const row = findLegacyAnchor();
+      return row;
+    }
+
+    function buildTitlebar() {
+      const bar = document.createElement('div');
+      bar.className = 'dsh-skin-titlebar';
+      bar.appendChild(btnMin);
+      bar.appendChild(btnMax);
+      bar.appendChild(btnClose);
+      document.body.appendChild(bar);
+      return bar;
+    }
+
+    // Invisible drag zone: only the header row's blank areas drag; every
+    // interactive element inside keeps working (no-drag).
     let dragRow = null;
 
-    function findHeaderRow() {
-      const log = findSessionLogButton();
-      if (!log) return null;
-      let node = log.parentElement;
+    function applyDragRow(fromNode) {
+      if (!fromNode) return;
+      let row = null;
+      let node = fromNode;
       for (let i = 0; i < 4 && node; i++) {
-        const t = node.textContent || '';
         const rect = node.getBoundingClientRect();
-        const isHeaderish =
-          (t.includes('标准模式') || t.includes('Standard')) &&
-          rect.height > 0 &&
-          rect.height <= 90 &&
-          rect.top < 100;
-        if (isHeaderish) return node;
+        if (rect.top < 100 && rect.height > 0 && rect.height <= 90) {
+          row = node;
+          break;
+        }
         node = node.parentElement;
       }
-      return null;
-    }
-
-    function applyDragRow() {
-      const row = findHeaderRow();
       if (!row) return;
       if (dragRow && dragRow !== row) dragRow.classList.remove('dsh-skin-dragrow');
       dragRow = row;
@@ -517,20 +544,36 @@
       }
     }
 
+    function anchorWindowButtons(container) {
+      if (!container) return false;
+      if (btnMin.parentElement !== container) {
+        container.appendChild(btnMin);
+        container.appendChild(btnMax);
+        container.appendChild(btnClose);
+      }
+      return true;
+    }
+
     function syncWindowUI() {
-      const log = findSessionLogButton();
-      if (!log) return; // header not mounted yet — the observer will re-run
-      anchorWindowButtons();
-      applyDragRow();
+      const container = findHeaderAnchor();
+      if (container) {
+        if (titlebarEl) {
+          titlebarEl.remove();
+          titlebarEl = null;
+        }
+        if (anchorWindowButtons(container)) applyDragRow(btnMin.parentElement);
+      } else if (!titlebarEl) {
+        titlebarEl = buildTitlebar();
+      }
     }
 
     syncWindowUI();
-    // React mounts the session header asynchronously after page load: watch
-    // the DOM so the buttons appear the instant Session log exists (no
-    // polling lag). The interval is only a safety net for odd re-renders.
+    // React mounts the header/composer asynchronously after page load and
+    // re-renders on view switches: watch the DOM so the buttons stay anchored
+    // (the interval is only a safety net for odd re-renders).
     const winObserver = new MutationObserver(() => {
-      const anchored = btnMin.parentElement && btnMin.previousElementSibling === findSessionLogButton();
-      if (!anchored || (dragRow && !dragRow.isConnected)) syncWindowUI();
+      if (!btnMin.isConnected || (dragRow && !dragRow.isConnected)) syncWindowUI();
+      else if (!findHeaderAnchor()) syncWindowUI();
     });
     winObserver.observe(document.body, { childList: true, subtree: true });
     setInterval(syncWindowUI, 10000);
@@ -644,12 +687,20 @@
     }
 
     function measureSidebarRight() {
-      // Expanded sidebar: rows carry role="treeitem".
+      // New harness UI (0.1.2-rc.1+): the composer seat spans the chat column
+      // only, so its left edge is the sidebar's right edge.
+      const seat = document.querySelector('[data-composer-seat]');
+      if (seat) {
+        const r = seat.getBoundingClientRect();
+        if (r.width > 0) return r.left + 8;
+      }
+      // Legacy expanded sidebar: rows carry role="treeitem" (left half only —
+      // the new JSON viewer also uses treeitem and must not be measured).
       let maxRight = 0;
       const items = document.querySelectorAll('[role="treeitem"]');
       for (const it of items) {
         const r = it.getBoundingClientRect();
-        if (r.right > maxRight) maxRight = r.right;
+        if (r.left < window.innerWidth / 2 && r.right > maxRight) maxRight = r.right;
       }
       if (maxRight > 0) return maxRight + 12;
       // Collapsed sidebar: a tall, narrow rail hugging the left edge.
@@ -670,7 +721,7 @@
       let left = window.innerWidth / 2 - 84;
       try {
         const sidebarRight = measureSidebarRight();
-        const ta = document.querySelector('textarea');
+        const ta = findComposerInput();
         const inputLeft = ta ? ta.getBoundingClientRect().left : window.innerWidth * 0.55;
         left = (sidebarRight + inputLeft) / 2 - 84;
       } catch (e) {}

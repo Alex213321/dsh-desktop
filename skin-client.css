@@ -216,6 +216,26 @@ body.dsh-skin {
   color: #ffffff;
 }
 
+/* Fallback titlebar strip: used only while no recognizable header is mounted
+   (view switches, third-party UIs). Floating at the top-right corner. */
+.dsh-skin-titlebar {
+  position: fixed;
+  top: 0;
+  right: 0;
+  z-index: 2147483002;
+  display: flex;
+  align-items: center;
+  height: 34px;
+  padding: 0 6px 0 2px;
+  -webkit-app-region: drag;
+  border-radius: 0 0 0 12px;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.3), transparent);
+  opacity: 0.85;
+}
+.dsh-skin-titlebar:hover {
+  opacity: 1;
+}
+
 /* --- invisible drag zone: the session header row's blank areas only --- */
 .dsh-skin-dragrow {
   -webkit-app-region: drag;
