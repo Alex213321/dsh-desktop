@@ -136,6 +136,15 @@ const LOAD_RETRY_MS = 1000;
 const SLOW_START_NOTICE_MS = 20 * 1000;
 const MIN_LOADING_MS = 1200; // keep the loading screen visible at least this long
 
+// The DSH web service prints an authentication URL on startup
+// (`dsh web: http://127.0.0.1:3080/?token=...`). Since the 0.1.2 line the
+// service refuses to serve index.html until that per-process token is
+// exchanged for a session cookie, so the shell must load the tokenized URL.
+let webBase = DSH_URL; // actual base of the service we are talking to
+let launchToken = null; // per-process token printed by the service
+let serviceOutTail = ''; // rolling buffer so a split token line still matches
+let fallbackUsed = false;
+
 let win = null;
 let tray = null;
 let dshProcess = null;
@@ -417,9 +426,9 @@ function main() {
   });
 }
 
-function isPortOpen() {
+function isPortOpen(port = DSH_PORT) {
   return new Promise((resolve) => {
-    const socket = net.connect(DSH_PORT, '127.0.0.1');
+    const socket = net.connect(port, '127.0.0.1');
     socket.once('connect', () => {
       socket.destroy();
       resolve(true);
@@ -432,22 +441,69 @@ function isPortOpen() {
 // (e.g. already started by the desktop "DSH" shortcut). --yes lets npx
 // download new versions without asking; --no-open keeps the default browser
 // closed: this Electron window is the only UI we open.
-async function ensureServer() {
-  if (await isPortOpen()) {
-    serverReady = true;
-    return;
-  }
+//
+// Since dsh 0.1.2-rc.1 the service answers 401 until its per-process launch
+// token (printed as `dsh web: http://127.0.0.1:<port>/?token=...`) is
+// exchanged for a session cookie, so every load must carry the token.
 
+function captureServiceOutput(text) {
+  serviceOutTail = (serviceOutTail + text).slice(-8192);
+  if (launchToken) return;
+  // Match the loopback URL; the optional trailing LAN copy is ignored.
+  let match;
+  const re = /(http:\/\/127\.0\.0\.1:\d+)\/\?token=([A-Za-z0-9_-]+)/g;
+  while ((match = re.exec(serviceOutTail))) {
+    webBase = match[1];
+    launchToken = match[2];
+  }
+}
+
+function readLastLaunchToken() {
+  try {
+    const text = fs.readFileSync(logPath(), 'utf8');
+    const re = /127\.0\.0\.1:\d+\/\?token=([A-Za-z0-9_-]+)/g;
+    let match;
+    let token = null;
+    while ((match = re.exec(text))) token = match[1];
+    return token;
+  } catch {
+    return null;
+  }
+}
+
+function dshUrl() {
+  return launchToken ? `${webBase}/?token=${launchToken}` : webBase;
+}
+
+// The 303 See Other answer from `/?token=...` proves the token belongs to
+// the service currently listening on that port.
+async function tokenProbe(base, token) {
+  try {
+    const res = await fetch(`${base}/?token=${token}`, { redirect: 'manual', cache: 'no-store' });
+    return res.status === 303;
+  } catch {
+    return false;
+  }
+}
+
+async function waitForPort(port) {
+  while (!quitting && !(await isPortOpen(port))) await sleep(300);
+  return !quitting;
+}
+
+async function spawnService(extraArgs) {
   try {
     fs.mkdirSync(path.dirname(logPath()), { recursive: true });
   } catch {}
   const logStream = fs.createWriteStream(logPath(), { flags: 'a' });
-  logStream.write(`\n[${new Date().toISOString()}] starting: npx --yes @deepseek-ai/dsh web --no-open\n`);
+  logStream.write(
+    `\n[${new Date().toISOString()}] starting: npx --yes @deepseek-ai/dsh web --no-open${extraArgs.length ? ' ' + extraArgs.join(' ') : ''}\n`
+  );
   setLoadingStatus('正在启动 DSH 服务…');
 
   const npx = process.platform === 'win32' ? 'npx.cmd' : 'npx';
   try {
-    dshProcess = spawn(npx, ['--yes', '@deepseek-ai/dsh', 'web', '--no-open'], {
+    dshProcess = spawn(npx, ['--yes', '@deepseek-ai/dsh', 'web', '--no-open', ...extraArgs], {
       cwd: WORKSPACE_DIR,
       windowsHide: true,
       stdio: ['ignore', 'pipe', 'pipe'],
@@ -457,12 +513,17 @@ async function ensureServer() {
     logStream.write(`${error}\n`);
     logStream.end();
     showStartupError();
-    return;
+    return false;
   }
   spawnedByApp = true;
 
-  dshProcess.stdout.on('data', (chunk) => logStream.write(chunk));
-  dshProcess.stderr.on('data', (chunk) => logStream.write(chunk));
+  const onData = (chunk) => {
+    const text = chunk.toString();
+    logStream.write(text);
+    captureServiceOutput(text);
+  };
+  dshProcess.stdout.on('data', onData);
+  dshProcess.stderr.on('data', onData);
 
   // New versions can take minutes to download on first launch; tell the
   // user what is happening instead of failing silently.
@@ -490,28 +551,95 @@ async function ensureServer() {
     if (quitting) return;
     spawnedByApp = false;
     dshProcess = null;
-    if (!serverReady) {
-      // The launcher process died before the port opened: surface the log.
-      showStartupError();
-    } else if (tray) {
-      tray.setToolTip('DSH（本地服务已停止）');
-    }
+    if (serverReady && tray) tray.setToolTip('DSH（本地服务已停止）');
   });
 
-  // Wait for the port with no arbitrary timeout: npx may legitimately be
-  // downloading a new version. A real failure exits the child and shows
-  // the error dialog above.
-  while (!quitting) {
-    if (await isPortOpen()) {
-      clearInterval(slowTimer);
-      serverReady = true;
-      logStream.write(`[${new Date().toISOString()}] server ready on ${DSH_URL}\n`);
-      if (tray) tray.setToolTip('DSH');
-      setLoadingStatus('服务已就绪，正在进入界面…');
-      return;
+  // Wait for the announced URL (it carries the launch token); npx may
+  // legitimately be downloading a new version first, so there is no
+  // arbitrary timeout. A real failure exits the child and reports below.
+  // Also accept the port coming up without a URL line (a profile with
+  // printUrl disabled, or an old service version): the session cookie may
+  // still authenticate it, and checkAuthFallback() covers a denial.
+  const expectedPort = extraArgs.length ? null : DSH_PORT;
+  let portSeenAt = null;
+  while (!quitting && dshProcess && !launchToken) {
+    if (expectedPort && (await isPortOpen(expectedPort))) {
+      if (portSeenAt === null) portSeenAt = Date.now();
+      // The URL line is printed right after the port comes up (server ready
+      // → announce); give it a short grace period before concluding the
+      // service never prints one (printUrl disabled / old version).
+      if (Date.now() - portSeenAt > 8000) break;
     }
-    await sleep(500);
+    await sleep(250);
   }
+  if (!launchToken) {
+    if (!quitting && !(expectedPort && (await isPortOpen(expectedPort)))) {
+      showStartupError();
+      return false;
+    }
+    serverReady = true;
+    logStream.write(`[${new Date().toISOString()}] server ready on ${expectedPort ? 'http://127.0.0.1:' + String(expectedPort) : '?'} (no token line)\n`);
+    if (tray) tray.setToolTip('DSH');
+    setLoadingStatus('服务已就绪，正在进入界面…');
+    return true;
+  }
+  clearInterval(slowTimer);
+
+  const port = Number(new URL(webBase).port);
+  if (!(await waitForPort(port))) return false;
+  serverReady = true;
+  logStream.write(`[${new Date().toISOString()}] server ready on ${webBase}\n`);
+  if (tray) tray.setToolTip('DSH');
+  setLoadingStatus('服务已就绪，正在进入界面…');
+  return true;
+}
+
+async function ensureServer() {
+  if (await isPortOpen(DSH_PORT)) {
+    // Something already serves 3080. If a previous instance of this app
+    // started it, its launch token is the last one in the log — verify it
+    // first, because a foreign `dsh web` (e.g. the dev server) has its own
+    // token. With no verified token, try a plain load first: an existing
+    // session cookie may already authenticate it, and checkAuthFallback()
+    // starts a spare service if the page is denied.
+    const logToken = readLastLaunchToken();
+    if (logToken && (await tokenProbe(DSH_URL, logToken))) {
+      launchToken = logToken;
+    }
+    serverReady = true;
+    return;
+  }
+  await spawnService([]);
+}
+
+// If the app could not authenticate an already-running service (port 3080
+// belongs to a foreign `dsh web`, or the session cookie expired), start the
+// service on an OS-assigned port instead of leaving the window empty.
+async function checkAuthFallback() {
+  if (!win || win.isDestroyed() || !win.webContents || win.webContents.isDestroyed()) return;
+  if (fallbackUsed || !serverReady) return;
+  let url = '';
+  try {
+    url = win.webContents.getURL();
+  } catch {}
+  if (!url.startsWith(webBase)) return;
+  const denied = await win.webContents
+    .executeJavaScript(`document.body && /authentication required/i.test(document.body.innerText)`)
+    .catch(() => false);
+  if (!denied) return;
+  if (launchToken) {
+    // The token arrived after the plain load started (the URL line is
+    // printed a moment after the port opens): reload with it instead of
+    // starting yet another service.
+    loadWithRetry();
+    return;
+  }
+  fallbackUsed = true;
+  goLoading(`端口 ${DSH_PORT} 已被其他 DSH 服务占用，正在改用空闲端口…`);
+  const ok = await spawnService(['--port', '0']);
+  if (!ok || quitting || !win || win.isDestroyed()) return;
+  setLoadingStatus('服务已就绪，正在进入界面…');
+  loadWithRetry();
 }
 
 function showStartupError() {
@@ -549,7 +677,7 @@ function injectSkin(wc) {
 }
 
 function loadWithRetry() {
-  win.loadURL(DSH_URL)
+  win.loadURL(dshUrl())
     .then(() => {
       loadingPhase = false;
       if (!win.isDestroyed()) win.show();
@@ -614,6 +742,7 @@ function createWindow(showSetup) {
     if (loadingPhase) applyLoadingStatus();
     win.show();
     injectSkin(win.webContents);
+    checkAuthFallback().catch(() => {});
   });
 
   // First-run key entry page, or the normal loading screen.
@@ -731,7 +860,7 @@ function buildMenu() {
       submenu: [
         {
           label: '在浏览器中打开 Web 版',
-          click: () => shell.openExternal(DSH_URL),
+          click: () => shell.openExternal(dshUrl()),
         },
       ],
     },
