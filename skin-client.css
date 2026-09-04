@@ -196,7 +196,7 @@ body.dsh-skin {
   height: 32px;
   border-radius: 8px;
   border: none;
-  background: rgba(5, 10, 22, 0.28); /* translucent chip, like the loading screen */
+  background: transparent; /* fully transparent, like the loading screen */
   color: #b8c0d0;
   cursor: pointer;
   padding: 0;
