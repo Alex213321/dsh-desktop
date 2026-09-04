@@ -54,9 +54,10 @@
   }
   function noop() {}
 
-  // Start media on an idle tick (the first time) so the freshly opened UI
-  // paints before the wallpaper + mascot videos begin decoding; afterwards
-  // every start is immediate (user actions stay snappy).
+  // Start media on the next couple of frames: the wallpaper must be visible
+  // together with the UI (an idle-tick deferral made it lag up to ~1.2s).
+  // Two rAFs push the decode start just past the injection moment; later
+  // starts (wallpaper switching, reopening) are immediate.
   let mediaStarted = false;
   function deferPlay(v) {
     const start = () => {
@@ -69,8 +70,7 @@
       start();
       return;
     }
-    if (window.requestIdleCallback) window.requestIdleCallback(start, { timeout: 1200 });
-    else setTimeout(start, 700);
+    requestAnimationFrame(() => requestAnimationFrame(start));
   }
 
   // Throttle: leading call passes through, trailing call is coalesced.
