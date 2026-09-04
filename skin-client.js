@@ -54,6 +54,25 @@
   }
   function noop() {}
 
+  // Start media on an idle tick (the first time) so the freshly opened UI
+  // paints before the wallpaper + mascot videos begin decoding; afterwards
+  // every start is immediate (user actions stay snappy).
+  let mediaStarted = false;
+  function deferPlay(v) {
+    const start = () => {
+      mediaStarted = true;
+      try {
+        v.play().catch(noop);
+      } catch (e) {}
+    };
+    if (mediaStarted) {
+      start();
+      return;
+    }
+    if (window.requestIdleCallback) window.requestIdleCallback(start, { timeout: 1200 });
+    else setTimeout(start, 700);
+  }
+
   // Throttle: leading call passes through, trailing call is coalesced.
   function throttle(fn, ms) {
     let timer = null;
@@ -93,7 +112,6 @@
     videoA.className = 'dsh-skin-video';
     videoB.className = 'dsh-skin-video';
     for (const v of [videoA, videoB]) {
-      v.autoplay = true;
       v.muted = true; // 动态壁纸静音
       v.loop = true; // 循环播放
       v.playsInline = true;
@@ -127,7 +145,7 @@
     try { slotEl[from].pause(); } catch (e) {}
     activeSlot = slot;
     slotEl[slot].style.display = 'block';
-    slotEl[slot].play().catch(noop);
+    deferPlay(slotEl[slot]);
   }
 
   function applyWallpaper() {
@@ -158,7 +176,7 @@
     // Already showing this wallpaper — nothing to do.
     if (slotId[activeSlot] === meta.id) {
       currentVideo().style.display = 'block';
-      currentVideo().play().catch(noop);
+      deferPlay(currentVideo());
       return;
     }
     // Loaded in the other slot — instant swap, no flash.
@@ -262,10 +280,9 @@
     const icon = make('video');
     icon.muted = true;
     icon.loop = true;
-    icon.autoplay = true;
     icon.playsInline = true;
     icon.src = 'wallpaper://skin/fab';
-    icon.play().catch(noop);
+    deferPlay(icon);
     fabEl.appendChild(icon);
     fabEl.addEventListener('click', () => {
       if (!panelEl) buildPanel();
@@ -442,20 +459,11 @@
     applyAll();
   });
 
-  // --- frameless window: controls embedded in the session header row ---------
-  // The three buttons sit immediately to the RIGHT of the "Session log"
-  // button, inside the official interface's header (no external strip).
+  // --- frameless window: controls in a persistent top-right strip ----------
+  // The strip is mounted immediately with the skin; the host header content
+  // ("Session 日志" and friends) is shifted left so nothing sits underneath.
   const bridgeWindow = window.dshWindow;
   if (bridgeWindow) {
-    function findSessionLogButton() {
-      const buttons = document.querySelectorAll('button');
-      for (const b of buttons) {
-        const t = (b.textContent || '').trim();
-        if (t === 'Session log' || t.includes('Session log')) return b;
-      }
-      return null;
-    }
-
     function winButton(cls, title, svg) {
       const btn = document.createElement('button');
       btn.className = 'dsh-skin-win-btn ' + cls;
@@ -486,29 +494,13 @@
       '<svg width="15" height="15" viewBox="0 0 12 12" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"><path d="M3.2 3.2l5.6 5.6M8.8 3.2l-5.6 5.6"/></svg>'
     );
 
-    // Anchors, new harness UI first (0.1.2-rc.1+ exposes stable data-*
-    // contracts and data-slot names), then the legacy Session log header,
-    // then a fixed overlay strip so the window always has working controls.
+    // Persistent corner strip: the window controls always live at the very
+    // top-right of the window, mounted immediately with the skin. The host
+    // header content (e.g. "Session 日志") is shifted left so nothing sits
+    // underneath; the strip itself carries the drag region (buttons no-drag).
+    const TITLEBAR_W = 132;
     let titlebarEl = null;
-
-    function findLegacyAnchor() {
-      const log = findSessionLogButton();
-      return log && log.parentElement ? log.parentElement : null;
-    }
-
-    function findHeaderAnchor() {
-      const slots = document.querySelectorAll('[data-slot]');
-      for (const slot of slots) {
-        const name = slot.getAttribute('data-slot') || '';
-        if (name === 'conversation.session.header.utilities') return slot.parentElement || slot;
-        if (name === 'conversation.session.header.actions') return slot.parentElement || slot;
-      }
-      const head = document.querySelector('[data-slot="conversation.session.header"]');
-      if (head) return head;
-      // Legacy layout: the header contains the Session log button.
-      const row = findLegacyAnchor();
-      return row;
-    }
+    let paddingRow = null;
 
     function buildTitlebar() {
       const bar = document.createElement('div');
@@ -520,63 +512,52 @@
       return bar;
     }
 
-    // Invisible drag zone: only the header row's blank areas drag; every
-    // interactive element inside keeps working (no-drag).
-    let dragRow = null;
+    function findSessionLogButton() {
+      const buttons = document.querySelectorAll('button');
+      for (const b of buttons) {
+        const t = (b.textContent || '').trim();
+        if (t && t.includes('Session') && (t.includes('日志') || t.includes('log'))) return b;
+      }
+      return null;
+    }
 
-    function applyDragRow(fromNode) {
-      if (!fromNode) return;
+    function shiftHeaderForControls() {
+      const log = findSessionLogButton();
+      if (!log) return;
       let row = null;
-      let node = fromNode;
-      for (let i = 0; i < 4 && node; i++) {
-        const rect = node.getBoundingClientRect();
-        if (rect.top < 100 && rect.height > 0 && rect.height <= 90) {
+      let node = log;
+      for (let i = 0; i < 5 && node; i++) {
+        const r = node.getBoundingClientRect();
+        if (r.width > 300 && r.top < 100 && r.height > 0 && r.height <= 90) {
           row = node;
           break;
         }
         node = node.parentElement;
       }
       if (!row) return;
-      if (dragRow && dragRow !== row) dragRow.classList.remove('dsh-skin-dragrow');
-      dragRow = row;
-      if (!dragRow.classList.contains('dsh-skin-dragrow')) {
-        dragRow.classList.add('dsh-skin-dragrow');
+      if (paddingRow && paddingRow !== row) paddingRow.style.paddingRight = '';
+      paddingRow = row;
+      if (parseInt(paddingRow.style.paddingRight, 10) !== TITLEBAR_W) {
+        paddingRow.style.paddingRight = TITLEBAR_W + 'px';
       }
-    }
-
-    function anchorWindowButtons(container) {
-      if (!container) return false;
-      if (btnMin.parentElement !== container) {
-        container.appendChild(btnMin);
-        container.appendChild(btnMax);
-        container.appendChild(btnClose);
-      }
-      return true;
     }
 
     function syncWindowUI() {
-      const container = findHeaderAnchor();
-      if (container) {
-        if (titlebarEl) {
-          titlebarEl.remove();
-          titlebarEl = null;
-        }
-        if (anchorWindowButtons(container)) applyDragRow(btnMin.parentElement);
-      } else if (!titlebarEl) {
-        titlebarEl = buildTitlebar();
-      }
+      if (!titlebarEl || !titlebarEl.isConnected) titlebarEl = buildTitlebar();
+      shiftHeaderForControls();
     }
 
     syncWindowUI();
-    // React mounts the header/composer asynchronously after page load and
-    // re-renders on view switches: watch the DOM so the buttons stay anchored
-    // (the interval is only a safety net for odd re-renders).
+    // The header mounts asynchronously with the session; re-apply the
+    // left-shift whenever it (or its content) changes. The interval is only
+    // a safety net for odd re-renders.
+    const shiftThrottled = throttle(shiftHeaderForControls, 400);
     const winObserver = new MutationObserver(() => {
-      if (!btnMin.isConnected || (dragRow && !dragRow.isConnected)) syncWindowUI();
-      else if (!findHeaderAnchor()) syncWindowUI();
+      if (!titlebarEl || !titlebarEl.isConnected) titlebarEl = buildTitlebar();
+      shiftThrottled();
     });
     winObserver.observe(document.body, { childList: true, subtree: true });
-    setInterval(syncWindowUI, 10000);
+    setInterval(syncWindowUI, 5000);
   }
 
   // --- info button (凭空生花) + 信息 panel ----------------------------------
@@ -588,7 +569,6 @@
     const infoVideo = make('video');
     infoVideo.muted = true;
     infoVideo.loop = true;
-    infoVideo.autoplay = true;
     infoVideo.playsInline = true;
     infoVideo.src = 'wallpaper://skin/info-fab';
     // Match the maid's visual size: portrait/square footage keeps the full
@@ -602,7 +582,7 @@
       },
       { once: true }
     );
-    infoVideo.play().catch(noop);
+    deferPlay(infoVideo);
     infoFab.appendChild(infoVideo);
     document.body.appendChild(infoFab);
 
