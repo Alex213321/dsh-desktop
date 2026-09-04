@@ -231,16 +231,27 @@ body.dsh-skin {
   background: transparent;
 }
 
-/* Invisible drag bar along the top edge, behind the page content: only
-   empty top pixels (hero view, margins) hit it, so the window can always be
-   dragged without blocking any UI element above it. */
+/* Invisible drag bar along the top edge for the hero view (no session):
+   shown only while no header row exists; cut short so it never reaches
+   the controls strip at the top-right. */
 .dsh-skin-topdrag {
   position: fixed;
   top: 0;
   left: 0;
-  right: 0;
-  height: 34px;
+  right: 146px;
+  height: 28px;
   z-index: -1;
+  display: none;
+  -webkit-app-region: drag;
+}
+
+/* Geometric drag slices over the header row's blank spans: only these
+   invisible strips are draggable — interactive elements and the corner
+   strip are excluded by their measured rects (JS keeps them in sync). */
+.dsh-skin-dragslice {
+  position: fixed;
+  z-index: 2147483001;
+  display: none;
   -webkit-app-region: drag;
 }
 

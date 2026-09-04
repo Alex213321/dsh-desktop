@@ -499,10 +499,11 @@
     // header content (e.g. "Session 日志") is shifted left so nothing sits
     // underneath; the strip itself carries the drag region (buttons no-drag).
     const TITLEBAR_W = 132;
+    const INTERACTIVE = 'button, a, input, textarea, select, [role="button"], [role="tab"], [role="menuitem"], [contenteditable="true"], img, label, svg';
     let titlebarEl = null;
     let topDragEl = null;
     let paddingRow = null;
-    let dragRow = null;
+    let dragSlices = [];
 
     function buildTitlebar() {
       const bar = document.createElement('div');
@@ -511,8 +512,6 @@
       bar.appendChild(btnMax);
       bar.appendChild(btnClose);
       document.body.appendChild(bar);
-      // Invisible top-edge drag bar (behind the UI): drags the window over
-      // empty top pixels, e.g. the hero view where no header is mounted.
       if (!topDragEl) {
         topDragEl = document.createElement('div');
         topDragEl.className = 'dsh-skin-topdrag';
@@ -547,39 +546,85 @@
       titlebarEl.style.height = height + 'px';
     }
 
-    // The whole header row is a drag zone (its blank areas and title text
-    // drag the window; interactive children are no-drag via CSS), so the
-    // window can be moved by grabbing the top of the interface again.
-    function updateDragRow(row) {
-      if (dragRow && dragRow !== row) {
-        dragRow.classList.remove('dsh-skin-dragrow');
-        dragRow.style.paddingRight = '';
-        dragRow = null;
+    function hideDragSlices() {
+      for (const d of dragSlices) d.style.display = 'none';
+    }
+
+    // Geometric drag zones: the header row's BLANK spans become draggable
+    // (invisible slices above the content), while every interactive element
+    // and the controls strip are excluded by their measured rects — so
+    // dragging works from the title/blank areas and NOTHING clickable is
+    // covered by a drag region, under any region-model.
+    function layoutDragZones(row) {
+      if (!row) {
+        hideDragSlices();
+        if (topDragEl) topDragEl.style.display = 'block'; // hero view: slim top bar
+        return;
       }
-      if (!row) return;
-      dragRow = row;
-      if (!dragRow.classList.contains('dsh-skin-dragrow')) {
-        dragRow.classList.add('dsh-skin-dragrow');
+      if (topDragEl) topDragEl.style.display = 'none';
+      const r = row.getBoundingClientRect();
+      if (r.width <= 0 || r.height <= 0) {
+        hideDragSlices();
+        return;
       }
+      const left = r.left;
+      const top = r.top;
+      const height = r.height;
+      const rightEdge = window.innerWidth - TITLEBAR_W - 14; // stay clear of the strip
+      const exclusions = [];
+      for (const el of row.querySelectorAll(INTERACTIVE)) {
+        const rr = el.getBoundingClientRect();
+        if (rr.width > 0 && rr.left < rightEdge && rr.right > left && rr.top < top + height && rr.bottom > top) {
+          exclusions.push(rr);
+        }
+      }
+      exclusions.sort((a, b) => a.left - b.left);
+      const slices = [];
+      let cursor = left;
+      for (const rr of exclusions) {
+        if (rr.left > cursor + 12) slices.push([cursor, Math.min(rr.left, rightEdge)]);
+        cursor = Math.max(cursor, rr.right);
+        if (cursor >= rightEdge) break;
+      }
+      if (rightEdge > cursor + 12) slices.push([cursor, rightEdge]);
+      let i = 0;
+      for (; i < slices.length; i++) {
+        let d = dragSlices[i];
+        if (!d) {
+          d = document.createElement('div');
+          d.className = 'dsh-skin-dragslice';
+          document.body.appendChild(d);
+          dragSlices.push(d);
+        }
+        d.style.display = 'block';
+        d.style.left = slices[i][0] + 'px';
+        d.style.top = top + 'px';
+        d.style.width = (slices[i][1] - slices[i][0]) + 'px';
+        d.style.height = height + 'px';
+      }
+      for (; i < dragSlices.length; i++) dragSlices[i].style.display = 'none';
+    }
+
+    function findHeaderRow(log) {
+      let node = log;
+      for (let i = 0; i < 5 && node; i++) {
+        const r = node.getBoundingClientRect();
+        if (r.width > 300 && r.top < 100 && r.height > 0 && r.height <= 90) {
+          return node;
+        }
+        node = node.parentElement;
+      }
+      return null;
     }
 
     function shiftHeaderForControls() {
       const log = findSessionLogButton();
       if (!log) {
         positionTitlebar(null);
-        updateDragRow(null);
+        layoutDragZones(null);
         return;
       }
-      let row = null;
-      let node = log;
-      for (let i = 0; i < 5 && node; i++) {
-        const r = node.getBoundingClientRect();
-        if (r.width > 300 && r.top < 100 && r.height > 0 && r.height <= 90) {
-          row = node;
-          break;
-        }
-        node = node.parentElement;
-      }
+      const row = findHeaderRow(log);
       if (row) {
         if (paddingRow && paddingRow !== row) paddingRow.style.paddingRight = '';
         paddingRow = row;
@@ -587,7 +632,7 @@
           paddingRow.style.paddingRight = TITLEBAR_W + 'px';
         }
       }
-      updateDragRow(row);
+      layoutDragZones(row);
       positionTitlebar(log);
     }
 
@@ -598,15 +643,15 @@
 
     syncWindowUI();
     // The header mounts asynchronously with the session; re-apply the
-    // left-shift and alignment whenever it (or its content) changes. The
-    // interval is only a safety net for odd re-renders.
+    // left-shift, drag zones and alignment whenever it (or its content)
+    // changes. The interval is only a safety net for odd re-renders.
     const shiftThrottled = throttle(shiftHeaderForControls, 400);
     const winObserver = new MutationObserver(() => {
       if (!titlebarEl || !titlebarEl.isConnected) titlebarEl = buildTitlebar();
       shiftThrottled();
     });
     winObserver.observe(document.body, { childList: true, subtree: true });
-    window.addEventListener('resize', () => positionTitlebar(findSessionLogButton()));
+    window.addEventListener('resize', () => shiftHeaderForControls());
     setInterval(syncWindowUI, 5000);
   }
 
